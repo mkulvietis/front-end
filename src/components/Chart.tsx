@@ -4,7 +4,7 @@
  * Supports pattern markers overlay.
  */
 import { onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
-import { createChart, createSeriesMarkers, CandlestickSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
+import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
 import { chartBars } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
@@ -51,6 +51,7 @@ export default function Chart() {
     let containerRef: HTMLDivElement | undefined;
     let chart: IChartApi | undefined;
     let candleSeries: ISeriesApi<'Candlestick'> | undefined;
+    let volumeSeries: ISeriesApi<'Histogram'> | undefined;
     let markersPlugin: ISeriesMarkersPluginApi<Time> | undefined;
 
     onMount(() => {
@@ -88,6 +89,21 @@ export default function Chart() {
             wickUpColor: '#26a69a',
         });
 
+        // Volume histogram at the bottom with separate price scale
+        volumeSeries = chart.addSeries(HistogramSeries, {
+            priceFormat: { type: 'volume' },
+            priceScaleId: 'volume',
+        });
+
+        // Configure volume price scale
+        chart.priceScale('volume').applyOptions({
+            scaleMargins: {
+                top: 0.85, // Volume occupies bottom 15% of chart
+                bottom: 0,
+            },
+            borderVisible: false,
+        });
+
         // Create markers plugin for pattern annotations (v5 API)
         markersPlugin = createSeriesMarkers(candleSeries, []);
 
@@ -121,6 +137,16 @@ export default function Chart() {
                 close: bar.close,
             }));
             candleSeries.setData(candleData);
+
+            // Set volume data with colors based on candle direction
+            if (volumeSeries) {
+                const volumeData = bars.map(bar => ({
+                    time: bar.time as Time,
+                    value: bar.volume || 0,
+                    color: bar.close >= bar.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)',
+                }));
+                volumeSeries.setData(volumeData);
+            }
         }
     });
 
