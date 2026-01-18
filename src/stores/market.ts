@@ -12,7 +12,7 @@ import {
     type MarketStateResponse,
     type TradeSetupsResponse
 } from '../api/client';
-import { selectedTimeframes } from './settings';
+import { selectedTimeframes, chartTimeframe } from './settings';
 
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
@@ -30,6 +30,7 @@ const [error, setError] = createSignal<string | null>(null);
  */
 async function refreshData(): Promise<void> {
     const timeframes = selectedTimeframes();
+    const chartTf = chartTimeframe();
     if (timeframes.length === 0) return;
 
     setIsLoading(true);
@@ -40,7 +41,7 @@ async function refreshData(): Promise<void> {
         const [dataResult, stateResult, barsResult, setupsResult] = await Promise.allSettled([
             fetchMarketData(timeframes),
             fetchMarketState(timeframes),
-            fetchBars(timeframes[0], 500), // Use finest timeframe for chart
+            fetchBars(chartTf, 500), // Use chart timeframe for chart bars
             fetchTradeSetups(),
         ]);
 
@@ -83,9 +84,10 @@ export function stopAutoRefresh(): void {
     }
 }
 
-// Re-fetch when timeframes change
+// Re-fetch when timeframes or chart timeframe change
 createEffect(() => {
     selectedTimeframes(); // Subscribe to changes
+    chartTimeframe(); // Subscribe to chart timeframe changes
     refreshData();
 });
 

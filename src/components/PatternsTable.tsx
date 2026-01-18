@@ -2,18 +2,24 @@
  * Patterns Table Component
  * Displays candlestick patterns with "show on chart" checkbox.
  */
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect } from 'solid-js';
 import { marketData } from '../stores/market';
 import { selectedTimeframes } from '../stores/settings';
 
-interface PatternInfo {
+export interface PatternInfo {
     name: string;
     classification: string;
     timeframe: string;
+    timeframeMinutes: number;
+    yyyymmdd: number;
+    hhmm: number;
 }
 
 // Track which patterns to show on chart
 const [visiblePatterns, setVisiblePatterns] = createSignal<Set<string>>(new Set());
+
+// Store all detected patterns with their bar info (for chart markers)
+const [allPatterns, setAllPatterns] = createSignal<PatternInfo[]>([]);
 
 function togglePattern(patternKey: string) {
     setVisiblePatterns(prev => {
@@ -62,12 +68,20 @@ export default function PatternsTable() {
                         name: p.name,
                         classification: p.classification,
                         timeframe: tf >= 60 ? `${tf / 60}h` : `${tf}m`,
+                        timeframeMinutes: tf,
+                        yyyymmdd: bar.yyyymmdd,
+                        hhmm: bar.hhmm,
                     });
                 }
             }
         }
 
         return result;
+    });
+
+    // Keep allPatterns signal in sync
+    createEffect(() => {
+        setAllPatterns(patterns());
     });
 
     return (
@@ -105,4 +119,4 @@ export default function PatternsTable() {
     );
 }
 
-export { visiblePatterns };
+export { visiblePatterns, allPatterns };

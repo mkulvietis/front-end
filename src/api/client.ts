@@ -162,8 +162,11 @@ export async function fetchBars(timeframe: number = 1, barsBack: number = 500): 
     const bars = await response.json();
 
     // Convert to TradingView format (time in seconds)
+    // Adjust by local timezone offset so chart displays local time
+    const localOffsetSeconds = new Date().getTimezoneOffset() * -60;
+
     return bars.map((bar: any) => ({
-        time: new Date(bar.bar_datetime).getTime() / 1000,
+        time: new Date(bar.bar_datetime).getTime() / 1000 + localOffsetSeconds,
         open: bar.open,
         high: bar.high,
         low: bar.low,
