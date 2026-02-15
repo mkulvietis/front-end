@@ -1,14 +1,26 @@
 /**
  * Control Plane Component
- * Shows last update time, local time, and timeframe selection.
+ * Shows last update time, local time, timeframe selection,
+ * and inference controls.
  */
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show, createSignal, onMount, onCleanup } from 'solid-js';
 import {
     AVAILABLE_TIMEFRAMES,
     toggleTimeframe,
     isTimeframeSelected
 } from '../stores/settings';
 import { lastUpdate, isLoading, error } from '../stores/market';
+import {
+    inferenceStatus,
+    autoIntervalMinutes,
+    isRunningInference,
+    runInference,
+    updateAutoInferenceInterval,
+    startInferencePolling,
+    stopInferencePolling,
+    loadAutoInferenceSettings,
+    DEFAULT_AUTO_INTERVAL_MINUTES,
+} from '../stores/inference';
 
 // Reactive local time - updates every second
 const [localTime, setLocalTime] = createSignal(new Date());
@@ -35,6 +47,45 @@ function formatTimeframeLabel(tf: number): string {
 }
 
 export default function ControlPlane() {
+    const [intervalInput, setIntervalInput] = createSignal(DEFAULT_AUTO_INTERVAL_MINUTES);
+    const [inferenceError, setInferenceError] = createSignal<string | null>(null);
+
+    onMount(() => {
+        startInferencePolling();
+        loadAutoInferenceSettings().then(() => {
+            setIntervalInput(autoIntervalMinutes());
+        });
+    });
+
+    onCleanup(() => {
+        stopInferencePolling();
+    });
+
+    async function handleRunInference() {
+        setInferenceError(null);
+        const result = await runInference();
+        if (!result.success && result.error) {
+            setInferenceError(result.error);
+            // Auto-clear error after 5 seconds
+            setTimeout(() => setInferenceError(null), 5000);
+        }
+    }
+
+    async function handleUpdateInterval() {
+        const minutes = intervalInput();
+        await updateAutoInferenceInterval(minutes);
+    }
+
+    function getStatusBadgeClass(): string {
+        const status = inferenceStatus()?.status;
+        switch (status) {
+            case 'running': return 'status-badge running';
+            case 'complete': return 'status-badge complete';
+            case 'error': return 'status-badge error';
+            default: return 'status-badge idle';
+        }
+    }
+
     return (
         <div class="control-plane">
             <div class="control-plane-left">
@@ -58,6 +109,48 @@ export default function ControlPlane() {
                 </Show>
             </div>
 
+            {/* Inference Controls */}
+            <div class="control-plane-center">
+                <div class="inference-controls">
+                    <button
+                        class={`run-inference-btn ${isRunningInference() ? 'running' : ''}`}
+                        onClick={handleRunInference}
+                        disabled={isRunningInference()}
+                    >
+                        <Show when={isRunningInference()} fallback={<>▶ Run Inference</>}>
+                            <span class="loading-dot">⟳</span> Running...
+                        </Show>
+                    </button>
+
+                    <div class="auto-inference-control">
+                        <label class="label">Auto Update:</label>
+                        <input
+                            type="number"
+                            class="interval-input"
+                            min="0"
+                            max="120"
+                            value={intervalInput()}
+                            onInput={(e) => setIntervalInput(parseInt(e.currentTarget.value) || 0)}
+                        />
+                        <span class="label">min</span>
+                        <button class="set-interval-btn" onClick={handleUpdateInterval}>
+                            Set
+                        </button>
+                    </div>
+
+                    <div class={getStatusBadgeClass()}>
+                        {inferenceStatus()?.status?.toUpperCase() || 'IDLE'}
+                    </div>
+                </div>
+
+                <Show when={inferenceError() || (inferenceStatus()?.status === 'error' && inferenceStatus()?.error)}>
+                    <div class="inference-error">
+                        <span class="error-icon">⚠</span>
+                        <span>{inferenceError() || inferenceStatus()?.error}</span>
+                    </div>
+                </Show>
+            </div>
+
             <div class="control-plane-right">
                 <span class="label">Timeframes:</span>
                 <div class="timeframe-buttons">
@@ -76,3 +169,4 @@ export default function ControlPlane() {
         </div>
     );
 }
+

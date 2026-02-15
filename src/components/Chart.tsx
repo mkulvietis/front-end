@@ -4,8 +4,8 @@
  * Supports pattern markers overlay.
  */
 import { onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
-import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
-import { chartBars } from '../stores/market';
+import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
+import { chartBars, chartTrendlines } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
 
@@ -53,6 +53,7 @@ export default function Chart() {
     let candleSeries: ISeriesApi<'Candlestick'> | undefined;
     let volumeSeries: ISeriesApi<'Histogram'> | undefined;
     let markersPlugin: ISeriesMarkersPluginApi<Time> | undefined;
+    let trendlineSeries: ISeriesApi<'Line'>[] = [];
 
     onMount(() => {
         if (!containerRef) return;
@@ -147,6 +148,49 @@ export default function Chart() {
                 }));
                 volumeSeries.setData(volumeData);
             }
+        }
+    });
+
+    // Draw trendlines when data changes
+    createEffect(() => {
+        const tfResult = chartTrendlines();
+        const bars = chartBars();
+        if (!chart) return;
+
+        // Remove previous trendline series
+        for (const s of trendlineSeries) {
+            chart.removeSeries(s);
+        }
+        trendlineSeries = [];
+
+        if (!tfResult || tfResult.trendlines.length === 0 || bars.length === 0) return;
+
+        for (const tl of tfResult.trendlines) {
+            const startIdx = tl.anchor_pivot.index;
+            if (startIdx < 0 || startIdx >= bars.length) continue;
+
+            const color = tl.type === 'resistance' ? '#ef5350' : '#26a69a';
+
+            const series = chart.addSeries(LineSeries, {
+                color,
+                lineWidth: 2,
+                lineStyle: 2, // Dashed
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+            });
+
+            // Plot a point per bar so the line follows chart spacing through time gaps
+            const points: { time: Time; value: number }[] = [];
+            for (let i = startIdx; i < bars.length; i++) {
+                points.push({
+                    time: bars[i].time as Time,
+                    value: tl.slope * i + tl.intercept,
+                });
+            }
+            series.setData(points);
+
+            trendlineSeries.push(series);
         }
     });
 

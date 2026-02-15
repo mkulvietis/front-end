@@ -77,26 +77,58 @@ export interface MarketStateResponse {
     pivots?: Pivots;
 }
 
-export interface TradeSetup {
-    status: string;
-    entry_zone: string;
-    stop_loss: number;
-    target_1: number;
-    target_2: number;
-    trigger_condition: string;
+export interface EntryRule {
+    type: 'limit' | 'market' | 'stop';
+    price: number;
+    condition: string;
 }
 
-export interface TradeSetupsResponse {
-    last_updated: string;
-    bias: string;
-    confidence: number;
-    rationale: string;
-    bullish_setup: TradeSetup;
-    bearish_setup: TradeSetup;
-    key_levels?: {
-        support: number[];
-        resistance: number[];
-    };
+export interface StopLossRule {
+    price: number;
+    description?: string;
+}
+
+export interface TargetRule {
+    price: number;
+    description?: string;
+}
+
+export interface TradeSetup {
+    id: string;
+    symbol: string;
+    direction: 'LONG' | 'SHORT';
+    status: 'NEW' | 'MONITORING' | 'CLOSE_TO_ENTRY' | 'TRADING' | 'PROFIT' | 'STOP_LOSS' | 'CANCELED';
+    created_at: string;
+    entry: EntryRule;
+    stop_loss: StopLossRule;
+    targets: TargetRule[];
+    rules_text: string;
+    reasoning?: string;
+}
+
+// Check if we need TradeSetupsResponse still?
+// The backend `get_inference_snapshot` returns `active_setups` list now in `InferenceStatus`? 
+// Wait, `get_inference_snapshot` returns `active_setups` inside the snapshot dict.
+// We also have `fetchTradeSetups` but where is that used? 
+// In market.ts: `fetchTradeSetups` calls `/api/trade_setups` (which we didn't explicitly create separate endpoint for, 
+// we just added it to `get_snapshot` i.e. `/api/status` or `get_inference_snapshot`).
+// Actually, `web_server.py` `get_inference` returns `app_state.get_inference_snapshot()`.
+// `state.py` `get_inference_snapshot` DOES NOT include `active_setups`.
+// `state.py` `get_snapshot` (for `/api/status`) DOES include `active_setups`.
+// So we should fetch setups from `/api/status` or add it to `get_inference` or create `/api/trade_setups`.
+// Let's assume we use `/api/status` or we update `fetchTradeSetups` to call `/api/status` or extracts it from there.
+// For now, let's update `InferenceStatus` interface to include `active_setups` if we plan to send it there,
+// OR update `MarketState`? 
+// Actually `/api/status` returns `DaemonState` snapshot.
+// Let's update `DaemonStatus` interface here.
+
+export interface DaemonStatus {
+    is_running: boolean;
+    last_output: string;
+    current_interval: number;
+    last_updated: string | null;
+    auto_inference_interval: number;
+    active_setups: TradeSetup[];
 }
 
 /**
@@ -175,15 +207,152 @@ export async function fetchBars(timeframe: number = 1, barsBack: number = 500): 
     }));
 }
 
+// --- Trendlines ---
+
+export interface TrendlinePivot {
+    index: number;
+    price: number;
+    type: string;
+    bar_datetime?: string;
+}
+
+export interface TrendlineData {
+    timeframe: number;
+    type: string;  // "support" or "resistance"
+    anchor_pivot: TrendlinePivot;
+    second_pivot: TrendlinePivot;
+    slope: number;
+    intercept: number;
+    touch_count: number;
+    score: number;
+}
+
+export interface TrendlineTimeframeResult {
+    trendlines: TrendlineData[];
+    price_relations: any[];
+    last_bar_index?: number;
+    last_bar_datetime?: string;
+}
+
+export interface TrendlineResponse {
+    ticker: string;
+    timeframes: Record<string, TrendlineTimeframeResult>;
+}
+
+/**
+ * Fetch trendlines for given timeframes.
+ */
+export async function fetchTrendlines(timeframes: number[], barsBack: number = 500): Promise<TrendlineResponse> {
+    const response = await fetch(`${API_BASE}/trendlines`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ticker: TICKER,
+            bars_back: barsBack,
+            timeframes,
+            only_final: false,
+            params: { max_bars: barsBack },
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Trendlines fetch failed: ${response.status}`);
+    }
+
+    return response.json();
+}
+
 /**
  * Fetch AI trade setups from trading-daemon.
  * Trading daemon runs on a separate port and serves LLM-generated analysis.
  */
 const TRADING_DAEMON_BASE = import.meta.env.VITE_TRADING_DAEMON_BASE || 'http://localhost:8001';
 
-export async function fetchTradeSetups(): Promise<TradeSetupsResponse | null> {
+/**
+ * Fetch Daemon Status (including active setups).
+ */
+export async function fetchDaemonStatus(): Promise<DaemonStatus | null> {
     try {
-        const response = await fetch(`${TRADING_DAEMON_BASE}/api/trade_setups`);
+        const response = await fetch(`${TRADING_DAEMON_BASE}/api/status`);
+        if (!response.ok) return null;
+        return response.json();
+    } catch {
+        return null;
+    }
+}
+
+// ==================== INFERENCE API ====================
+
+export interface InferenceStatus {
+    status: 'none' | 'running' | 'complete' | 'error';
+    result: string | null;
+    error: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+}
+
+export interface AutoInferenceSettings {
+    interval: number;
+    message?: string;
+}
+
+/**
+ * Get current inference status from trading-daemon.
+ */
+export async function getInferenceStatus(): Promise<InferenceStatus | null> {
+    try {
+        const response = await fetch(`${TRADING_DAEMON_BASE}/api/inference`);
+        if (!response.ok) return null;
+        return response.json();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Trigger a new inference run.
+ * Returns 409 if inference is already running.
+ */
+export async function triggerInference(): Promise<{ success: boolean; error?: string }> {
+    try {
+        const response = await fetch(`${TRADING_DAEMON_BASE}/api/inference`, {
+            method: 'POST',
+        });
+        if (response.ok) {
+            return { success: true };
+        }
+        const data = await response.json();
+        return { success: false, error: data.error || `Failed with status ${response.status}` };
+    } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : 'Network error' };
+    }
+}
+
+/**
+ * Get current auto-inference interval setting.
+ */
+export async function getAutoInferenceInterval(): Promise<number> {
+    try {
+        const response = await fetch(`${TRADING_DAEMON_BASE}/api/auto-inference`);
+        if (!response.ok) return 0;
+        const data = await response.json();
+        return data.interval || 0;
+    } catch {
+        return 0;
+    }
+}
+
+/**
+ * Set auto-inference interval.
+ * @param interval Interval in seconds (0 = disabled)
+ */
+export async function setAutoInferenceInterval(interval: number): Promise<AutoInferenceSettings | null> {
+    try {
+        const response = await fetch(`${TRADING_DAEMON_BASE}/api/auto-inference`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interval }),
+        });
         if (!response.ok) return null;
         return response.json();
     } catch {

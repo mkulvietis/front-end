@@ -4,6 +4,7 @@
  */
 import { onMount, onCleanup } from 'solid-js';
 import { startAutoRefresh, stopAutoRefresh } from './stores/market';
+import { startInferencePolling, stopInferencePolling } from './stores/inference';
 import ControlPlane from './components/ControlPlane';
 import Chart from './components/Chart';
 import IndicatorsTable from './components/IndicatorsTable';
@@ -15,10 +16,12 @@ import './App.css';
 export default function App() {
   onMount(() => {
     startAutoRefresh();
+    startInferencePolling();
   });
 
   onCleanup(() => {
     stopAutoRefresh();
+    stopInferencePolling();
   });
 
   return (

@@ -7,10 +7,10 @@ import {
     fetchMarketData,
     fetchMarketState,
     fetchBars,
-    fetchTradeSetups,
+    fetchTrendlines,
     type MarketDataResponse,
     type MarketStateResponse,
-    type TradeSetupsResponse
+    type TrendlineTimeframeResult,
 } from '../api/client';
 import { selectedTimeframes, chartTimeframe } from './settings';
 
@@ -19,8 +19,8 @@ const REFRESH_INTERVAL = 5000; // 5 seconds
 // Reactive signals for market data
 const [marketData, setMarketData] = createSignal<MarketDataResponse | null>(null);
 const [marketState, setMarketState] = createSignal<MarketStateResponse | null>(null);
-const [tradeSetups, setTradeSetups] = createSignal<TradeSetupsResponse | null>(null);
 const [chartBars, setChartBars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>>([]);
+const [chartTrendlines, setChartTrendlines] = createSignal<TrendlineTimeframeResult | null>(null);
 const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
 const [isLoading, setIsLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
@@ -38,11 +38,11 @@ async function refreshData(): Promise<void> {
 
     try {
         // Fetch all data in parallel
-        const [dataResult, stateResult, barsResult, setupsResult] = await Promise.allSettled([
+        const [dataResult, stateResult, barsResult, trendResult] = await Promise.allSettled([
             fetchMarketData(timeframes),
             fetchMarketState(timeframes),
             fetchBars(chartTf, 500), // Use chart timeframe for chart bars
-            fetchTradeSetups(),
+            fetchTrendlines([chartTf], 500),
         ]);
 
         if (dataResult.status === 'fulfilled') {
@@ -57,8 +57,10 @@ async function refreshData(): Promise<void> {
             setChartBars(barsResult.value);
         }
 
-        if (setupsResult.status === 'fulfilled') {
-            setTradeSetups(setupsResult.value);
+        if (trendResult.status === 'fulfilled') {
+            const tfKey = `${chartTf}min`;
+            const tfData = trendResult.value.timeframes[tfKey];
+            setChartTrendlines(tfData ?? null);
         }
 
         setLastUpdate(new Date());
@@ -94,8 +96,8 @@ createEffect(() => {
 export {
     marketData,
     marketState,
-    tradeSetups,
     chartBars,
+    chartTrendlines,
     lastUpdate,
     isLoading,
     error,
