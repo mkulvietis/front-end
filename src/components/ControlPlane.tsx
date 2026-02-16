@@ -61,9 +61,9 @@ export default function ControlPlane() {
         stopInferencePolling();
     });
 
-    async function handleRunInference() {
+    async function handleRunInference(strategy: 'main' | 'alt' = 'main') {
         setInferenceError(null);
-        const result = await runInference();
+        const result = await runInference(strategy);
         if (!result.success && result.error) {
             setInferenceError(result.error);
             // Auto-clear error after 5 seconds
@@ -114,10 +114,20 @@ export default function ControlPlane() {
                 <div class="inference-controls">
                     <button
                         class={`run-inference-btn ${isRunningInference() ? 'running' : ''}`}
-                        onClick={handleRunInference}
+                        onClick={() => handleRunInference('main')}
                         disabled={isRunningInference()}
                     >
-                        <Show when={isRunningInference()} fallback={<>▶ Run Inference</>}>
+                        <Show when={isRunningInference() && inferenceStatus()?.strategy === 'main'} fallback={<>▶ Run</>}>
+                            <span class="loading-dot">⟳</span> Running...
+                        </Show>
+                    </button>
+
+                    <button
+                        class={`run-inference-btn run-alt ${isRunningInference() ? 'running' : ''}`}
+                        onClick={() => handleRunInference('alt')}
+                        disabled={isRunningInference()}
+                    >
+                        <Show when={isRunningInference() && inferenceStatus()?.strategy === 'alt'} fallback={<>⚡ Run Alt</>}>
                             <span class="loading-dot">⟳</span> Running...
                         </Show>
                     </button>

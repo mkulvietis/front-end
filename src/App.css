@@ -62,6 +62,55 @@ body {
 }
 
 /* ===================
+   TAB BAR
+=================== */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  padding: 4px;
+  width: fit-content;
+}
+
+.tab-btn {
+  padding: var(--space-sm) var(--space-lg);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.tab-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.tab-btn.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  background: var(--accent-blue);
+  border-radius: 1px;
+}
+
+/* ===================
    CONTROL PLANE
 =================== */
 .control-plane {
@@ -131,6 +180,19 @@ body {
 }
 
 .run-inference-btn.running {
+  background: linear-gradient(135deg, var(--accent-yellow), var(--neutral));
+}
+
+.run-inference-btn.run-alt {
+  background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+  box-shadow: 0 2px 8px rgba(163, 113, 247, 0.3);
+}
+
+.run-inference-btn.run-alt:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(163, 113, 247, 0.4);
+}
+
+.run-inference-btn.run-alt.running {
   background: linear-gradient(135deg, var(--accent-yellow), var(--neutral));
 }
 
@@ -698,7 +760,7 @@ h4 {
   padding: var(--space-md);
 }
 
-.setup-row {
+.setup-card .setup-row {
   display: flex;
   justify-content: space-between;
   padding: var(--space-xs) 0;

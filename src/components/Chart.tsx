@@ -188,6 +188,19 @@ export default function Chart() {
                     value: tl.slope * i + tl.intercept,
                 });
             }
+
+            // Extend 5 bars into future
+            const intervalSeconds = chartTimeframe() * 60;
+            const lastBarTime = bars[bars.length - 1].time as number;
+
+            for (let k = 1; k <= 5; k++) {
+                const futureIdx = bars.length - 1 + k;
+                points.push({
+                    time: (lastBarTime + (k * intervalSeconds)) as Time,
+                    value: tl.slope * futureIdx + tl.intercept,
+                });
+            }
+
             series.setData(points);
 
             trendlineSeries.push(series);
@@ -266,5 +279,3 @@ export default function Chart() {
         </div>
     );
 }
-
-

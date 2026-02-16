@@ -90,13 +90,13 @@ export function stopInferencePolling(): void {
 /**
  * Trigger inference manually.
  */
-export async function runInference(): Promise<{ success: boolean; error?: string }> {
+export async function runInference(strategy: 'main' | 'alt' = 'main'): Promise<{ success: boolean; error?: string }> {
     if (isRunningInference()) {
         return { success: false, error: 'Inference already running' };
     }
 
     setIsRunningInference(true);
-    const result = await triggerInference();
+    const result = await triggerInference(strategy);
 
     if (!result.success) {
         setIsRunningInference(false);

@@ -3,8 +3,10 @@
  * Provides typed fetch wrappers for all market data endpoints.
  */
 
-// Use environment variable for API base URL, fallback to localhost for development
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+// When accessed through a proxy (e.g. ngrok), use same-origin so requests
+// go through the data-service proxy. On localhost, hit services directly.
+const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+const API_BASE = import.meta.env.VITE_API_BASE || (isLocalhost ? 'http://localhost:8000' : '');
 const TICKER = '@ES';
 
 // Types based on actual API responses
@@ -224,12 +226,24 @@ export interface TrendlineData {
     slope: number;
     intercept: number;
     touch_count: number;
+    touch_pivots: TrendlinePivot[];
+    is_regression: boolean;
     score: number;
+}
+
+export interface PriceRelation {
+    trendline_index: number;
+    type: string;        // "support" or "resistance"
+    distance: number;
+    distance_pct: number;
+    distance_atr: number;
+    proximity: string;   // "at", "near", "moderate", "far", "extreme"
+    line_price: number;
 }
 
 export interface TrendlineTimeframeResult {
     trendlines: TrendlineData[];
-    price_relations: any[];
+    price_relations: PriceRelation[];
     last_bar_index?: number;
     last_bar_datetime?: string;
 }
@@ -266,7 +280,7 @@ export async function fetchTrendlines(timeframes: number[], barsBack: number = 5
  * Fetch AI trade setups from trading-daemon.
  * Trading daemon runs on a separate port and serves LLM-generated analysis.
  */
-const TRADING_DAEMON_BASE = import.meta.env.VITE_TRADING_DAEMON_BASE || 'http://localhost:8001';
+const TRADING_DAEMON_BASE = import.meta.env.VITE_TRADING_DAEMON_BASE || (isLocalhost ? 'http://localhost:8001' : '');
 
 /**
  * Fetch Daemon Status (including active setups).
@@ -289,6 +303,7 @@ export interface InferenceStatus {
     error: string | null;
     started_at: string | null;
     completed_at: string | null;
+    strategy: string | null;
 }
 
 export interface AutoInferenceSettings {
@@ -313,10 +328,12 @@ export async function getInferenceStatus(): Promise<InferenceStatus | null> {
  * Trigger a new inference run.
  * Returns 409 if inference is already running.
  */
-export async function triggerInference(): Promise<{ success: boolean; error?: string }> {
+export async function triggerInference(strategy: 'main' | 'alt' = 'main'): Promise<{ success: boolean; error?: string }> {
     try {
         const response = await fetch(`${TRADING_DAEMON_BASE}/api/inference`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ strategy }),
         });
         if (response.ok) {
             return { success: true };
