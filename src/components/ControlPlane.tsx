@@ -16,8 +16,6 @@ import {
     isRunningInference,
     runInference,
     updateAutoInferenceInterval,
-    startInferencePolling,
-    stopInferencePolling,
     loadAutoInferenceSettings,
     DEFAULT_AUTO_INTERVAL_MINUTES,
 } from '../stores/inference';
@@ -51,14 +49,14 @@ export default function ControlPlane() {
     const [inferenceError, setInferenceError] = createSignal<string | null>(null);
 
     onMount(() => {
-        startInferencePolling();
+        // startInferencePolling() is managed in App.tsx
         loadAutoInferenceSettings().then(() => {
             setIntervalInput(autoIntervalMinutes());
         });
     });
 
     onCleanup(() => {
-        stopInferencePolling();
+        // stopInferencePolling() is managed in App.tsx
     });
 
     async function handleRunInference(strategy: 'main' | 'alt' = 'main') {

@@ -57,34 +57,45 @@ import { getInferenceStatus, type InferenceStatus } from '../api/client';
 const [inferenceStatus, setInferenceStatus] = createSignal<InferenceStatus | null>(null);
 
 async function pollAll(): Promise<void> {
-    await Promise.all([
-        pollDaemonStatus(),
-        (async () => {
-            const status = await getInferenceStatus();
-            if (status) {
-                setInferenceStatus(status);
-                setIsRunningInference(status.status === 'running');
-            }
-        })()
-    ]);
+    try {
+        await pollDaemonStatus();
+    } catch (e) {
+        console.error("Daemon status fetch error:", e);
+    }
+    
+    try {
+        const status = await getInferenceStatus();
+        if (status) {
+            setInferenceStatus(status);
+            setIsRunningInference(status.status === 'running');
+        }
+    } catch (e) {
+        console.error("Inference status fetch error:", e);
+    }
+    
+    // Schedule next poll only if still active
+    if (statusPollIntervalId !== undefined) {
+        statusPollIntervalId = window.setTimeout(pollAll, 10000);
+    }
 }
 
 /**
  * Start polling.
  */
 export function startInferencePolling(): void {
+    if (statusPollIntervalId !== undefined) return; // Already polling
+    statusPollIntervalId = -1; // Marker that we are active
     pollAll(); // Initial fetch
-    statusPollIntervalId = window.setInterval(pollAll, 1000); // Poll every 1s
 }
 
 /**
  * Stop polling.
  */
 export function stopInferencePolling(): void {
-    if (statusPollIntervalId) {
-        clearInterval(statusPollIntervalId);
-        statusPollIntervalId = undefined;
+    if (statusPollIntervalId !== undefined && statusPollIntervalId !== -1) {
+        window.clearTimeout(statusPollIntervalId);
     }
+    statusPollIntervalId = undefined;
 }
 
 /**
