@@ -150,7 +150,7 @@ export default function TradeSetups() {
                                         <td class="truncate">{formatTime(setup.created_at)}</td>
                                         <td class="truncate">{setup.symbol}</td>
                                         <td class={`truncate side-${setup.direction.toLowerCase()}`}>{setup.direction}</td>
-                                        <td class="truncate">{setup.entry.price.toFixed(2)}</td>
+                                        <td class="truncate">{setup.entry?.price != null ? setup.entry.price.toFixed(2) : '-'}</td>
                                         <td class="truncate">
                                             {setup.targets.length > 0 ? setup.targets[setup.targets.length - 1].price.toFixed(2) : '--'}
                                         </td>
@@ -171,7 +171,7 @@ export default function TradeSetups() {
                     <Show when={selectedSetup()} fallback={<div class="details-placeholder">Select a setup to view rules</div>}>
                         <div class="details-content">
                             <div class="details-header">
-                                <h4>{selectedSetup()?.direction} @ {selectedSetup()?.entry.price}</h4>
+                                <h4>{selectedSetup()?.direction} {selectedSetup()?.entry?.price != null ? `@ ${selectedSetup()?.entry?.price}` : 'Market/Immediate'}</h4>
                                 <span class="setup-id">ID: {selectedSetup()?.id}</span>
                             </div>
 
@@ -188,7 +188,7 @@ export default function TradeSetups() {
                                 </div>
                                 <div class="param-item">
                                     <label>Entry Condition</label>
-                                    <span class="value">{selectedSetup()?.entry.condition}</span>
+                                    <span class="value">{selectedSetup()?.entry?.condition || selectedSetup()?.entry?.conditions || 'N/A'}</span>
                                 </div>
                                 <div class="param-item">
                                     <label>Targets</label>

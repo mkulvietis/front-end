@@ -80,9 +80,10 @@ export interface MarketStateResponse {
 }
 
 export interface EntryRule {
-    type: 'limit' | 'market' | 'stop';
-    price: number;
-    condition: string;
+    type: 'limit' | 'market' | 'stop' | 'immediate';
+    price?: number;
+    condition?: string;
+    conditions?: string;
 }
 
 export interface StopLossRule {
@@ -101,7 +102,7 @@ export interface TradeSetup {
     direction: 'LONG' | 'SHORT';
     status: 'NEW' | 'MONITORING' | 'CLOSE_TO_ENTRY' | 'TRADING' | 'PROFIT' | 'STOP_LOSS' | 'CANCELED';
     created_at: string;
-    entry: EntryRule;
+    entry?: EntryRule;
     stop_loss: StopLossRule;
     targets: TargetRule[];
     rules_text: string;
