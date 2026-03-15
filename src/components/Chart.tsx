@@ -178,6 +178,9 @@ export default function Chart() {
                 priceLineVisible: false,
                 lastValueVisible: false,
                 crosshairMarkerVisible: false,
+                // Exclude trendlines from auto-scaling so they never push the
+                // chart's price axis to fit them — only candles set the scale.
+                autoscaleInfoProvider: () => null,
             });
 
             // Plot a point per bar so the line follows chart spacing through time gaps
