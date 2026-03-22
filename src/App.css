@@ -417,6 +417,33 @@ body {
   width: 100%;
 }
 
+.chart-resizer {
+  height: 8px;
+  background: var(--bg-tertiary);
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.chart-resizer:hover, .chart-resizer:active {
+  background: var(--accent-blue);
+}
+
+.chart-resizer::after {
+  content: '';
+  width: 32px;
+  height: 2px;
+  background: var(--border-default);
+  border-radius: 1px;
+}
+.chart-resizer:hover::after, .chart-resizer:active::after {
+  background: white;
+}
+
 /* ===================
    TABLES COMMON
 =================== */

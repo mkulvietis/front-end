@@ -3,7 +3,7 @@
  * Uses lightweight-charts v5 for candlestick display.
  * Supports pattern markers overlay.
  */
-import { onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
+import { createSignal, onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
 import { chartBars, chartTrendlines, chartOrderBlocks } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
@@ -56,6 +56,45 @@ export default function Chart() {
     let trendlineSeries: ISeriesApi<'Line'>[] = [];
     let obSeries: ISeriesApi<'Baseline'>[] = [];
 
+    const [chartHeight, setChartHeight] = createSignal(Number(localStorage.getItem('obEngineChartHeight')) || 400);
+
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    const onResizeStart = (e: MouseEvent) => {
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = chartHeight();
+        document.addEventListener('mousemove', onResizeMove);
+        document.addEventListener('mouseup', onResizeEnd);
+        document.body.style.userSelect = 'none'; // Prevent text selection while dragging
+    };
+
+    const onResizeMove = (e: MouseEvent) => {
+        if (!isResizing) return;
+        requestAnimationFrame(() => {
+            const delta = e.clientY - startY;
+            const newHeight = Math.max(400, startHeight + delta);
+            setChartHeight(newHeight);
+            
+            // Explicitly resize internal chart canvas
+            if (containerRef && chart) {
+                chart.applyOptions({ height: newHeight, width: containerRef.clientWidth });
+            }
+        });
+    };
+
+    const onResizeEnd = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onResizeMove);
+        document.removeEventListener('mouseup', onResizeEnd);
+        document.body.style.userSelect = '';
+        
+        localStorage.setItem('obEngineChartHeight', chartHeight().toString());
+    };
+
     onMount(() => {
         if (!containerRef) return;
 
@@ -79,7 +118,11 @@ export default function Chart() {
                 timeVisible: true,
                 secondsVisible: false,
             },
+            autoSize: true, // Let it adapt fully
         });
+
+        // Set initial height
+        chart.applyOptions({ height: chartHeight() });
 
         // v5 API: use chart.addSeries with series type
         candleSeries = chart.addSeries(CandlestickSeries, {
@@ -346,7 +389,12 @@ export default function Chart() {
                     </For>
                 </div>
             </div>
-            <div ref={containerRef} class="chart-canvas" />
+            <div 
+                ref={containerRef} 
+                class="chart-canvas" 
+                style={{ height: `${chartHeight()}px` }}
+            />
+            <div class="chart-resizer" onMouseDown={onResizeStart} title="Drag to resize chart vertically" />
         </div>
     );
 }
