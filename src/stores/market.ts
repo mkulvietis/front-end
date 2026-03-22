@@ -12,9 +12,11 @@ import {
     fetchMarketState,
     fetchBars,
     fetchTrendlines,
+    fetchOrderBlocks,
     type MarketDataResponse,
     type MarketStateResponse,
     type TrendlineTimeframeResult,
+    type OrderBlockData,
 } from '../api/client';
 import { selectedTimeframes, chartTimeframe } from './settings';
 
@@ -31,11 +33,13 @@ const [marketData, setMarketData] = createSignal<MarketDataResponse | null>(null
 const [marketState, setMarketState] = createSignal<MarketStateResponse | null>(null);
 const [chartBars, setChartBars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>>([]);
 const [chartTrendlines, setChartTrendlines] = createSignal<TrendlineTimeframeResult | null>(null);
+const [chartOrderBlocks, setChartOrderBlocks] = createSignal<OrderBlockData[]>([]);
 const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
 const [isLoading, setIsLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
 
 const trendlineCache = new Map<number, TrendlineTimeframeResult>();
+const orderBlockCache = new Map<number, OrderBlockData[]>();
 
 // Track when bars were last fully loaded so we know when to do incremental
 let lastBarsFullLoad = 0;
@@ -177,9 +181,22 @@ export async function recalculateTrendlines() {
         }
     } catch (e) {
         console.error("Failed to recalculate trendlines", e);
-    } finally {
-        setIsLoading(false);
     }
+
+    // Also refresh order blocks for this timeframe
+    try {
+        const obResult = await fetchOrderBlocks(tf, 500);
+        if (obResult && obResult.order_blocks) {
+            orderBlockCache.set(tf, obResult.order_blocks);
+            if (chartTimeframe() === tf) {
+                setChartOrderBlocks(obResult.order_blocks);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch order blocks", e);
+    }
+
+    setIsLoading(false);
 }
 
 let effectTimeout: number | undefined;
@@ -212,6 +229,12 @@ createEffect(() => {
     } else {
         setChartTrendlines(null);
     }
+
+    if (orderBlockCache.has(tf)) {
+        setChartOrderBlocks(orderBlockCache.get(tf)!);
+    } else {
+        setChartOrderBlocks([]);
+    }
 });
 
 export {
@@ -219,6 +242,7 @@ export {
     marketState,
     chartBars,
     chartTrendlines,
+    chartOrderBlocks,
     lastUpdate,
     isLoading,
     error,

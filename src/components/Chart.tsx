@@ -4,8 +4,8 @@
  * Supports pattern markers overlay.
  */
 import { onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
-import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
-import { chartBars, chartTrendlines } from '../stores/market';
+import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
+import { chartBars, chartTrendlines, chartOrderBlocks } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
 
@@ -54,6 +54,7 @@ export default function Chart() {
     let volumeSeries: ISeriesApi<'Histogram'> | undefined;
     let markersPlugin: ISeriesMarkersPluginApi<Time> | undefined;
     let trendlineSeries: ISeriesApi<'Line'>[] = [];
+    let obSeries: ISeriesApi<'Baseline'>[] = [];
 
     onMount(() => {
         if (!containerRef) return;
@@ -207,6 +208,73 @@ export default function Chart() {
             series.setData(points);
 
             trendlineSeries.push(series);
+        }
+    });
+
+    // Draw Order Block zones
+    createEffect(() => {
+        const obs = chartOrderBlocks();
+        const bars = chartBars();
+        if (!chart) return;
+
+        // Remove previous OB series
+        for (const s of obSeries) {
+            chart.removeSeries(s);
+        }
+        obSeries = [];
+
+        if (obs.length === 0 || bars.length === 0) return;
+
+        for (const ob of obs) {
+            // Find the robust starting index by mapping the exact datetime
+            let startIdx = ob.origin_index;
+            if (ob.origin_datetime) {
+                const obTimeSecs = new Date(ob.origin_datetime).getTime() / 1000;
+                const foundIdx = bars.findIndex(b => b.time === obTimeSecs);
+                if (foundIdx !== -1) {
+                    startIdx = foundIdx;
+                }
+            }
+            
+            if (startIdx < 0 || startIdx >= bars.length) continue;
+
+            const isBullish = ob.type === 'bullish';
+            const baseColor = isBullish ? '38, 166, 154' : '239, 83, 80';
+            const alpha = ob.mitigated ? 0.3 : 0.6;
+
+            // Draw a single filled BaselineSeries to represent the OB zone block
+            const series = chart.addSeries(BaselineSeries, {
+                baseValue: { type: 'price', price: ob.low },
+                topFillColor1: `rgba(${baseColor}, ${alpha})`,
+                topFillColor2: `rgba(${baseColor}, ${alpha})`,
+                topLineColor: `rgba(${baseColor}, ${Math.min(1, alpha + 0.3)})`,
+                bottomFillColor1: 'transparent',
+                bottomFillColor2: 'transparent',
+                bottomLineColor: `rgba(${baseColor}, ${Math.min(1, alpha + 0.3)})`,
+                lineWidth: 1,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+                autoscaleInfoProvider: () => null,
+            });
+
+            const points: { time: Time; value: number }[] = [];
+            for (let i = startIdx; i < bars.length; i++) {
+                points.push({ time: bars[i].time as Time, value: ob.high });
+            }
+
+            // Extend 3 bars into the future
+            const intervalSeconds = chartTimeframe() * 60;
+            const lastBarTime = bars[bars.length - 1].time as number;
+            for (let k = 1; k <= 3; k++) {
+                points.push({
+                    time: (lastBarTime + (k * intervalSeconds)) as Time,
+                    value: ob.high,
+                });
+            }
+
+            series.setData(points);
+            obSeries.push(series);
         }
     });
 

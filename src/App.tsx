@@ -69,7 +69,7 @@ export default function App() {
             "cursor": "pointer"
           }}
         >
-          Calculate Trendlines
+          Calculate Trendlines & OBs
         </button>
       </div>
 

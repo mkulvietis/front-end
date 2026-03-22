@@ -277,6 +277,45 @@ export async function fetchTrendlines(timeframes: number[], barsBack: number = 5
     return response.json();
 }
 
+// --- Order Blocks ---
+
+export interface OrderBlockData {
+    type: string;  // "bullish" or "bearish"
+    origin_index: number;
+    origin_datetime?: string;
+    high: number;
+    low: number;
+    mitigated: boolean;
+}
+
+export interface OrderBlockResponse {
+    ticker: string;
+    timeframe: number;
+    order_blocks: OrderBlockData[];
+}
+
+/**
+ * Fetch active order blocks for a given timeframe.
+ */
+export async function fetchOrderBlocks(timeframe: number, barsBack: number = 500): Promise<OrderBlockResponse> {
+    const response = await fetch(`${API_BASE}/order_blocks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ticker: TICKER,
+            timeframe,
+            bars_back: barsBack,
+            atr_multiplier: 0.5,
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Order blocks fetch failed: ${response.status}`);
+    }
+
+    return response.json();
+}
+
 /**
  * Fetch AI trade setups from trading-daemon.
  * Trading daemon runs on a separate port and serves LLM-generated analysis.
