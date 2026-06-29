@@ -60,14 +60,14 @@ export default function Chart() {
 
     const [chartHeight, setChartHeight] = createSignal(Number(localStorage.getItem('obEngineChartHeight')) || 400);
 
-    // Calculate IBS value in real-time from the latest bar of the chart
+    // Calculate IBS value in real-time from the previous (already closed) bar of the chart
     const ibsValue = createMemo(() => {
         const bars = chartBars();
-        if (bars.length === 0) return null;
-        const lastBar = bars[bars.length - 1];
-        const high = lastBar.high;
-        const low = lastBar.low;
-        const close = lastBar.close;
+        if (bars.length < 2) return null;
+        const prevBar = bars[bars.length - 2];
+        const high = prevBar.high;
+        const low = prevBar.low;
+        const close = prevBar.close;
         const denom = high - low;
         return denom !== 0 ? (close - low) / denom : 0.5;
     });
