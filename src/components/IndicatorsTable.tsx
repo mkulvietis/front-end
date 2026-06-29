@@ -9,6 +9,7 @@ import { selectedTimeframes } from '../stores/settings';
 
 // Friendly indicator names
 const INDICATOR_LABELS: Record<string, string> = {
+    IBS: 'IBS',
     RSI14: 'RSI (14)',
     SMA20: 'SMA (20)',
     EMA20: 'EMA (20)',
@@ -32,7 +33,12 @@ function getIndicatorNames(): string[] {
     const firstTf = Object.keys(data.data)[0];
     if (!firstTf || !data.data[firstTf]?.bars?.[0]?.indicators) return [];
 
-    return Object.keys(data.data[firstTf].bars[0].indicators);
+    const list = Object.keys(data.data[firstTf].bars[0].indicators);
+    return list.sort((a, b) => {
+        if (a === 'IBS') return -1;
+        if (b === 'IBS') return 1;
+        return a.localeCompare(b);
+    });
 }
 
 // Format indicator value for display
@@ -147,7 +153,20 @@ export default function IndicatorsTable() {
                                 <tr>
                                     <td class="indicator-name">{INDICATOR_LABELS[ind] || ind}</td>
                                     <For each={timeframes()}>
-                                        {(tf) => <td class="indicator-value">{getValueForTimeframe(ind, tf)}</td>}
+                                        {(tf) => {
+                                            const val = getValueForTimeframe(ind, tf);
+                                            const isIBS = ind === 'IBS';
+                                            let cellStyle = {};
+                                            if (isIBS && val !== '—') {
+                                                const num = parseFloat(val);
+                                                if (num < 0.15) {
+                                                    cellStyle = { color: '#26a69a', 'font-weight': 'bold' };
+                                                } else if (num > 0.85) {
+                                                    cellStyle = { color: '#ef5350', 'font-weight': 'bold' };
+                                                }
+                                            }
+                                            return <td class="indicator-value" style={cellStyle}>{val}</td>;
+                                        }}
                                     </For>
                                     <td class="indicator-semantic">{getSemanticText(ind)}</td>
                                 </tr>

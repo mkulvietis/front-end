@@ -13,10 +13,10 @@ export const AVAILABLE_TIMEFRAMES = [1, 3, 5, 10, 15, 30, 60, 120] as const;
 export const CHART_TIMEFRAMES = [1, 3, 5, 10, 15, 30, 60] as const;
 
 // Default selected timeframes
-const DEFAULT_TIMEFRAMES = [1, 5, 30, 120];
+const DEFAULT_TIMEFRAMES = [1, 5, 15, 30, 120];
 
-// Default chart timeframe (5 minutes)
-const DEFAULT_CHART_TIMEFRAME = 5;
+// Default chart timeframe (15 minutes)
+const DEFAULT_CHART_TIMEFRAME = 15;
 
 // Load from localStorage
 function loadSettings(): { timeframes: number[]; chartTimeframe: number } {

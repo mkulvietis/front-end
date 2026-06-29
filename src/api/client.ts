@@ -29,6 +29,7 @@ export interface Session {
     yyyymmdd: number;
     ORB5?: { low: number; high: number };
     ORB15?: { low: number; high: number };
+    ORB60?: { low: number; high: number };
 }
 
 export interface MarketDataResponse {

@@ -5,7 +5,7 @@
  */
 import { createSignal, onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
-import { chartBars, chartTrendlines, chartOrderBlocks } from '../stores/market';
+import { chartBars, chartTrendlines, chartOrderBlocks, marketState, marketData } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
 
@@ -55,8 +55,37 @@ export default function Chart() {
     let markersPlugin: ISeriesMarkersPluginApi<Time> | undefined;
     let trendlineSeries: ISeriesApi<'Line'>[] = [];
     let obSeries: ISeriesApi<'Baseline'>[] = [];
+    let orb60HighLine: any = null;
+    let orb60LowLine: any = null;
 
     const [chartHeight, setChartHeight] = createSignal(Number(localStorage.getItem('obEngineChartHeight')) || 400);
+
+    // Calculate IBS value in real-time from the latest bar of the chart
+    const ibsValue = createMemo(() => {
+        const bars = chartBars();
+        if (bars.length === 0) return null;
+        const lastBar = bars[bars.length - 1];
+        const high = lastBar.high;
+        const low = lastBar.low;
+        const close = lastBar.close;
+        const denom = high - low;
+        return denom !== 0 ? (close - low) / denom : 0.5;
+    });
+
+    const ibsLabel = createMemo(() => {
+        const tf = chartTimeframe();
+        if (tf >= 60) return `IBS (${tf / 60}H)`;
+        return `IBS (${tf}m)`;
+    });
+
+    const ibsColorClass = createMemo(() => {
+        const val = ibsValue();
+        if (val === null) return '';
+        const num = Number(val);
+        if (num < 0.15) return 'ibs-green';
+        if (num > 0.85) return 'ibs-red';
+        return 'ibs-neutral';
+    });
 
     let isResizing = false;
     let startY = 0;
@@ -321,6 +350,45 @@ export default function Chart() {
         }
     });
 
+    // Draw ORB60 lines when available
+    createEffect(() => {
+        const state = marketState();
+        const orb60 = state?.session?.ORB60;
+
+        if (candleSeries) {
+            // Remove existing lines if they exist
+            if (orb60HighLine) {
+                candleSeries.removePriceLine(orb60HighLine);
+                orb60HighLine = null;
+            }
+            if (orb60LowLine) {
+                candleSeries.removePriceLine(orb60LowLine);
+                orb60LowLine = null;
+            }
+
+            // Add new lines if ORB60 is available
+            if (orb60) {
+                orb60HighLine = candleSeries.createPriceLine({
+                    price: orb60.high,
+                    color: '#ff9800', // Sleek orange color
+                    lineWidth: 2,
+                    lineStyle: 2, // Dashed
+                    axisLabelVisible: true,
+                    title: 'ORB60 High',
+                });
+
+                orb60LowLine = candleSeries.createPriceLine({
+                    price: orb60.low,
+                    color: '#ff9800', // Sleek orange color
+                    lineWidth: 2,
+                    lineStyle: 2, // Dashed
+                    axisLabelVisible: true,
+                    title: 'ORB60 Low',
+                });
+            }
+        }
+    });
+
     // Compute markers for visible patterns
     const patternMarkers = createMemo((): SeriesMarker<Time>[] => {
         const visible = visiblePatterns();
@@ -375,7 +443,29 @@ export default function Chart() {
     return (
         <div class="chart-container">
             <div class="chart-header">
-                <span class="chart-title">@ES - E-mini S&P 500</span>
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '16px' }}>
+                    <span class="chart-title">@ES - E-mini S&P 500</span>
+                    <div class="ibs-badge" style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '6px',
+                        'font-size': '0.85rem',
+                        'background': 'var(--bg-tertiary)',
+                        'border': '1px solid var(--border-default)',
+                        'padding': '4px 8px',
+                        'border-radius': 'var(--radius-sm)',
+                        'font-weight': '500'
+                    }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>{ibsLabel()}:</span>
+                        <span style={{
+                            color: ibsColorClass() === 'ibs-green' ? 'var(--bullish)' : ibsColorClass() === 'ibs-red' ? 'var(--bearish)' : 'var(--text-primary)',
+                            'font-weight': 'bold',
+                            'font-family': 'SF Mono, Consolas, monospace'
+                        }}>
+                            {ibsValue() !== null ? Number(ibsValue()).toFixed(2) : '—'}
+                        </span>
+                    </div>
+                </div>
                 <div class="chart-timeframe-selector">
                     <For each={[...CHART_TIMEFRAMES]}>
                         {(tf) => (
