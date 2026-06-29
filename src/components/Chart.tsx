@@ -5,7 +5,7 @@
  */
 import { createSignal, onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
-import { chartBars, chartTrendlines, chartOrderBlocks, marketState, marketData, chartIbs15Bars } from '../stores/market';
+import { chartBars, chartTrendlines, chartOrderBlocks, marketState, chartIbs15Bars } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
 

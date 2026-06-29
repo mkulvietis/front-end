@@ -50,9 +50,9 @@ let lastBarsFullLoad = 0;
  * Updates existing bars (same time key) and appends new ones.
  */
 function mergeBars(
-    existing: Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>,
-    incoming: Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>,
-): Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }> {
+    existing: Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }>,
+    incoming: Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }>,
+): Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }> {
     if (existing.length === 0) return incoming;
     if (incoming.length === 0) return existing;
 
