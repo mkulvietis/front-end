@@ -186,6 +186,7 @@ export async function fetchBars(timeframe: number = 1, barsBack: number = 500): 
     low: number;
     close: number;
     volume?: number;
+    is_final: boolean;
 }>> {
     const response = await fetch(
         `${API_BASE}/bars/${TICKER}?timeframe=${timeframe}&bars_back=${barsBack}`
@@ -208,6 +209,7 @@ export async function fetchBars(timeframe: number = 1, barsBack: number = 500): 
         low: bar.low,
         close: bar.close,
         volume: bar.volume,
+        is_final: bar.is_final,
     }));
 }
 

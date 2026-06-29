@@ -31,7 +31,8 @@ const FULL_BARS_BACK = 500;
 // Reactive signals for market data
 const [marketData, setMarketData] = createSignal<MarketDataResponse | null>(null);
 const [marketState, setMarketState] = createSignal<MarketStateResponse | null>(null);
-const [chartBars, setChartBars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>>([]);
+const [chartBars, setChartBars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }>>([]);
+const [chartIbs15Bars, setChartIbs15Bars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }>>([]);
 const [chartTrendlines, setChartTrendlines] = createSignal<TrendlineTimeframeResult | null>(null);
 const [chartOrderBlocks, setChartOrderBlocks] = createSignal<OrderBlockData[]>([]);
 const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
@@ -118,6 +119,12 @@ async function refreshBars(): Promise<void> {
             lastBarsFullLoad = Date.now();
         }
     } catch (e) { console.error("Bars fetch error:", e); }
+
+    try {
+        // Fetch 15-minute bars for the IBS indicator (2 bars back is enough)
+        const ibs15Bars = await fetchBars(15, 2);
+        setChartIbs15Bars(ibs15Bars);
+    } catch (e) { console.error("IBS 15m bars fetch error:", e); }
 
     // Schedule next
     if (barsTimerId !== undefined) {
@@ -241,6 +248,7 @@ export {
     marketData,
     marketState,
     chartBars,
+    chartIbs15Bars,
     chartTrendlines,
     chartOrderBlocks,
     lastUpdate,

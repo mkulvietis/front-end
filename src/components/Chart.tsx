@@ -5,7 +5,7 @@
  */
 import { createSignal, onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
-import { chartBars, chartTrendlines, chartOrderBlocks, marketState, marketData } from '../stores/market';
+import { chartBars, chartTrendlines, chartOrderBlocks, marketState, marketData, chartIbs15Bars } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
 
@@ -60,23 +60,32 @@ export default function Chart() {
 
     const [chartHeight, setChartHeight] = createSignal(Number(localStorage.getItem('obEngineChartHeight')) || 400);
 
-    // Calculate IBS value in real-time from the previous (already closed) bar of the chart
+    // Calculate IBS value in real-time from the latest closed 15m bar
     const ibsValue = createMemo(() => {
-        const bars = chartBars();
-        if (bars.length < 2) return null;
-        const prevBar = bars[bars.length - 2];
-        const high = prevBar.high;
-        const low = prevBar.low;
-        const close = prevBar.close;
+        const bars = chartIbs15Bars();
+        if (bars.length === 0) return null;
+        
+        // Find the latest closed bar. The last bar is usually the active (incomplete) bar,
+        // and the second-to-last is the latest closed bar.
+        // If the last bar is marked as final, then it is closed and we should use it.
+        const lastBar = bars[bars.length - 1];
+        let closedBar = null;
+        if (lastBar.is_final) {
+            closedBar = lastBar;
+        } else {
+            closedBar = bars.length >= 2 ? bars[bars.length - 2] : null;
+        }
+        
+        if (!closedBar) return null;
+        
+        const high = closedBar.high;
+        const low = closedBar.low;
+        const close = closedBar.close;
         const denom = high - low;
         return denom !== 0 ? (close - low) / denom : 0.5;
     });
 
-    const ibsLabel = createMemo(() => {
-        const tf = chartTimeframe();
-        if (tf >= 60) return `IBS (${tf / 60}H)`;
-        return `IBS (${tf}m)`;
-    });
+    const ibsLabel = "IBS (15m)";
 
     const ibsColorClass = createMemo(() => {
         const val = ibsValue();
@@ -456,7 +465,7 @@ export default function Chart() {
                         'border-radius': 'var(--radius-sm)',
                         'font-weight': '500'
                     }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{ibsLabel()}:</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{ibsLabel}:</span>
                         <span style={{
                             color: ibsColorClass() === 'ibs-green' ? 'var(--bullish)' : ibsColorClass() === 'ibs-red' ? 'var(--bearish)' : 'var(--text-primary)',
                             'font-weight': 'bold',
