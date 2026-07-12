@@ -179,7 +179,7 @@ export async function fetchMarketState(timeframes: number[]): Promise<MarketStat
 /**
  * Fetch OHLCV bars for chart (TradingView format).
  */
-export async function fetchBars(timeframe: number = 1, barsBack: number = 500): Promise<Array<{
+export async function fetchBars(timeframe: number = 1, barsBack: number = 1000): Promise<Array<{
     time: number;
     open: number;
     high: number;
@@ -260,7 +260,7 @@ export interface TrendlineResponse {
 /**
  * Fetch trendlines for given timeframes.
  */
-export async function fetchTrendlines(timeframes: number[], barsBack: number = 500): Promise<TrendlineResponse> {
+export async function fetchTrendlines(timeframes: number[], barsBack: number = 1000, endDatetime?: string): Promise<TrendlineResponse> {
     const response = await fetch(`${API_BASE}/trendlines`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -269,6 +269,7 @@ export async function fetchTrendlines(timeframes: number[], barsBack: number = 5
             bars_back: barsBack,
             timeframes,
             only_final: false,
+            end_datetime: endDatetime,
             params: { max_bars: barsBack },
         }),
     });
@@ -300,7 +301,7 @@ export interface OrderBlockResponse {
 /**
  * Fetch active order blocks for a given timeframe.
  */
-export async function fetchOrderBlocks(timeframe: number, barsBack: number = 500): Promise<OrderBlockResponse> {
+export async function fetchOrderBlocks(timeframe: number, barsBack: number = 1000, endDatetime?: string): Promise<OrderBlockResponse> {
     const response = await fetch(`${API_BASE}/order_blocks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -309,6 +310,7 @@ export async function fetchOrderBlocks(timeframe: number, barsBack: number = 500
             timeframe,
             bars_back: barsBack,
             atr_multiplier: 0.5,
+            end_datetime: endDatetime,
         }),
     });
 

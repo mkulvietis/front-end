@@ -10,7 +10,7 @@ const STORAGE_KEY = 'trading-dashboard-settings';
 export const AVAILABLE_TIMEFRAMES = [1, 3, 5, 10, 15, 30, 60, 120] as const;
 
 // Chart timeframe options (subset for chart display)
-export const CHART_TIMEFRAMES = [1, 3, 5, 10, 15, 30, 60] as const;
+export const CHART_TIMEFRAMES = [1, 3, 5, 10, 15, 30, 60, 120] as const;
 
 // Default selected timeframes
 const DEFAULT_TIMEFRAMES = [1, 5, 15, 30, 120];

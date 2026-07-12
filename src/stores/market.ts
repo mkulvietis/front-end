@@ -26,13 +26,12 @@ const BARS_INTERVAL = 5000;      // 5s  — chart bars (incremental)
 // If chart was updated less than 60s ago, fetch only a few bars
 const INCREMENTAL_THRESHOLD_MS = 60_000;
 const INCREMENTAL_BARS_BACK = 2;
-const FULL_BARS_BACK = 500;
+const FULL_BARS_BACK = 1000;
 
 // Reactive signals for market data
 const [marketData, setMarketData] = createSignal<MarketDataResponse | null>(null);
 const [marketState, setMarketState] = createSignal<MarketStateResponse | null>(null);
 const [chartBars, setChartBars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }>>([]);
-const [chartIbs15Bars, setChartIbs15Bars] = createSignal<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number; is_final: boolean }>>([]);
 const [chartTrendlines, setChartTrendlines] = createSignal<TrendlineTimeframeResult | null>(null);
 const [chartOrderBlocks, setChartOrderBlocks] = createSignal<OrderBlockData[]>([]);
 const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
@@ -120,11 +119,7 @@ async function refreshBars(): Promise<void> {
         }
     } catch (e) { console.error("Bars fetch error:", e); }
 
-    try {
-        // Fetch 15-minute bars for the IBS indicator (2 bars back is enough)
-        const ibs15Bars = await fetchBars(15, 2);
-        setChartIbs15Bars(ibs15Bars);
-    } catch (e) { console.error("IBS 15m bars fetch error:", e); }
+
 
     // Schedule next
     if (barsTimerId !== undefined) {
@@ -172,11 +167,25 @@ export async function refreshData(): Promise<void> {
  * Explicitly recalculate trendlines for the current chart timeframe.
  * Updates cache and signal.
  */
-export async function recalculateTrendlines() {
+export async function recalculateTrendlines(barsBack?: number) {
     const tf = chartTimeframe();
     setIsLoading(true);
+    let endDatetime: string | undefined;
+    if (barsBack !== undefined && barsBack > 0) {
+        const bars = chartBars();
+        if (bars.length > 0) {
+            const targetIdx = Math.max(0, bars.length - 1 - barsBack);
+            const targetBar = bars[targetIdx];
+            const localOffsetSeconds = new Date().getTimezoneOffset() * -60;
+            const absoluteTimeMs = (targetBar.time - localOffsetSeconds) * 1000;
+            endDatetime = new Date(absoluteTimeMs).toISOString();
+        } else {
+            endDatetime = new Date(Date.now() - barsBack * tf * 60 * 1000).toISOString();
+        }
+    }
+
     try {
-        const result = await fetchTrendlines([tf], 500);
+        const result = await fetchTrendlines([tf], 1000, endDatetime);
         const key = `${tf}min`;
         if (result && result.timeframes && result.timeframes[key]) {
             const data = result.timeframes[key];
@@ -192,7 +201,7 @@ export async function recalculateTrendlines() {
 
     // Also refresh order blocks for this timeframe
     try {
-        const obResult = await fetchOrderBlocks(tf, 500);
+        const obResult = await fetchOrderBlocks(tf, 1000, endDatetime);
         if (obResult && obResult.order_blocks) {
             orderBlockCache.set(tf, obResult.order_blocks);
             if (chartTimeframe() === tf) {
@@ -248,7 +257,6 @@ export {
     marketData,
     marketState,
     chartBars,
-    chartIbs15Bars,
     chartTrendlines,
     chartOrderBlocks,
     lastUpdate,

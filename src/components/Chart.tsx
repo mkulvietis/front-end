@@ -5,7 +5,7 @@
  */
 import { createSignal, onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
-import { chartBars, chartTrendlines, chartOrderBlocks, marketState, chartIbs15Bars } from '../stores/market';
+import { chartBars, chartTrendlines, chartOrderBlocks, marketState } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
 
@@ -59,42 +59,6 @@ export default function Chart() {
     let orb60LowLine: any = null;
 
     const [chartHeight, setChartHeight] = createSignal(Number(localStorage.getItem('obEngineChartHeight')) || 400);
-
-    // Calculate IBS value in real-time from the latest closed 15m bar
-    const ibsValue = createMemo(() => {
-        const bars = chartIbs15Bars();
-        if (bars.length === 0) return null;
-        
-        // Find the latest closed bar. The last bar is usually the active (incomplete) bar,
-        // and the second-to-last is the latest closed bar.
-        // If the last bar is marked as final, then it is closed and we should use it.
-        const lastBar = bars[bars.length - 1];
-        let closedBar = null;
-        if (lastBar.is_final) {
-            closedBar = lastBar;
-        } else {
-            closedBar = bars.length >= 2 ? bars[bars.length - 2] : null;
-        }
-        
-        if (!closedBar) return null;
-        
-        const high = closedBar.high;
-        const low = closedBar.low;
-        const close = closedBar.close;
-        const denom = high - low;
-        return denom !== 0 ? (close - low) / denom : 0.5;
-    });
-
-    const ibsLabel = "IBS (15m)";
-
-    const ibsColorClass = createMemo(() => {
-        const val = ibsValue();
-        if (val === null) return '';
-        const num = Number(val);
-        if (num < 0.15) return 'ibs-green';
-        if (num > 0.85) return 'ibs-red';
-        return 'ibs-neutral';
-    });
 
     let isResizing = false;
     let startY = 0;
@@ -247,8 +211,18 @@ export default function Chart() {
 
         if (!tfResult || tfResult.trendlines.length === 0 || bars.length === 0) return;
 
+        const localOffsetSeconds = new Date().getTimezoneOffset() * -60;
+
         for (const tl of tfResult.trendlines) {
-            const startIdx = tl.anchor_pivot.index;
+            let startIdx = tl.anchor_pivot.index;
+            if (tl.anchor_pivot.bar_datetime) {
+                const pivotTimeSecs = new Date(tl.anchor_pivot.bar_datetime).getTime() / 1000 + localOffsetSeconds;
+                const foundIdx = bars.findIndex(b => Math.abs(b.time - pivotTimeSecs) < 1);
+                if (foundIdx !== -1) {
+                    startIdx = foundIdx;
+                }
+            }
+
             if (startIdx < 0 || startIdx >= bars.length) continue;
 
             const color = tl.type === 'resistance' ? '#ef5350' : '#26a69a';
@@ -267,9 +241,10 @@ export default function Chart() {
 
             // Plot a point per bar so the line follows chart spacing through time gaps
             const points: { time: Time; value: number }[] = [];
-            for (let i = startIdx; i < bars.length; i++) {
+            for (let j = startIdx; j < bars.length; j++) {
+                const i = tl.anchor_pivot.index + (j - startIdx);
                 points.push({
-                    time: bars[i].time as Time,
+                    time: bars[j].time as Time,
                     value: tl.slope * i + tl.intercept,
                 });
             }
@@ -279,7 +254,7 @@ export default function Chart() {
             const lastBarTime = bars[bars.length - 1].time as number;
 
             for (let k = 1; k <= 5; k++) {
-                const futureIdx = bars.length - 1 + k;
+                const futureIdx = tl.anchor_pivot.index + (bars.length - 1 - startIdx) + k;
                 points.push({
                     time: (lastBarTime + (k * intervalSeconds)) as Time,
                     value: tl.slope * futureIdx + tl.intercept,
@@ -306,12 +281,14 @@ export default function Chart() {
 
         if (obs.length === 0 || bars.length === 0) return;
 
+        const localOffsetSeconds = new Date().getTimezoneOffset() * -60;
+
         for (const ob of obs) {
             // Find the robust starting index by mapping the exact datetime
             let startIdx = ob.origin_index;
             if (ob.origin_datetime) {
-                const obTimeSecs = new Date(ob.origin_datetime).getTime() / 1000;
-                const foundIdx = bars.findIndex(b => b.time === obTimeSecs);
+                const obTimeSecs = new Date(ob.origin_datetime).getTime() / 1000 + localOffsetSeconds;
+                const foundIdx = bars.findIndex(b => Math.abs(b.time - obTimeSecs) < 1);
                 if (foundIdx !== -1) {
                     startIdx = foundIdx;
                 }
@@ -453,27 +430,7 @@ export default function Chart() {
         <div class="chart-container">
             <div class="chart-header">
                 <div style={{ display: 'flex', 'align-items': 'center', gap: '16px' }}>
-                    <span class="chart-title">@ES - E-mini S&P 500</span>
-                    <div class="ibs-badge" style={{
-                        display: 'flex',
-                        'align-items': 'center',
-                        gap: '6px',
-                        'font-size': '0.85rem',
-                        'background': 'var(--bg-tertiary)',
-                        'border': '1px solid var(--border-default)',
-                        'padding': '4px 8px',
-                        'border-radius': 'var(--radius-sm)',
-                        'font-weight': '500'
-                    }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{ibsLabel}:</span>
-                        <span style={{
-                            color: ibsColorClass() === 'ibs-green' ? 'var(--bullish)' : ibsColorClass() === 'ibs-red' ? 'var(--bearish)' : 'var(--text-primary)',
-                            'font-weight': 'bold',
-                            'font-family': 'SF Mono, Consolas, monospace'
-                        }}>
-                            {ibsValue() !== null ? Number(ibsValue()).toFixed(2) : '—'}
-                        </span>
-                    </div>
+                    <span class="chart-title">@ES</span>
                 </div>
                 <div class="chart-timeframe-selector">
                     <For each={[...CHART_TIMEFRAMES]}>
