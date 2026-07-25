@@ -4,7 +4,7 @@
  * Supports pattern markers overlay.
  */
 import { createSignal, onMount, onCleanup, createEffect, createMemo, For } from 'solid-js';
-import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, ColorType } from 'lightweight-charts';
+import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, LineSeries, BaselineSeries, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type CandlestickData, type Time, type SeriesMarker, type AutoscaleInfo, ColorType } from 'lightweight-charts';
 import { chartBars, chartTrendlines, chartOrderBlocks, marketState } from '../stores/market';
 import { visiblePatterns, allPatterns } from './PatternsTable';
 import { chartTimeframe, setChartTimeframe, CHART_TIMEFRAMES } from '../stores/settings';
@@ -55,8 +55,7 @@ export default function Chart() {
     let markersPlugin: ISeriesMarkersPluginApi<Time> | undefined;
     let trendlineSeries: ISeriesApi<'Line'>[] = [];
     let obSeries: ISeriesApi<'Baseline'>[] = [];
-    let orb60HighLine: any = null;
-    let orb60LowLine: any = null;
+    let orb60Series: ISeriesApi<'Line'>[] = [];
 
     const [chartHeight, setChartHeight] = createSignal(Number(localStorage.getItem('obEngineChartHeight')) || 400);
 
@@ -134,6 +133,36 @@ export default function Chart() {
             borderUpColor: '#26a69a',
             wickDownColor: '#ef5350',
             wickUpColor: '#26a69a',
+            autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
+                const res = original();
+                const bars = chartBars();
+                if (!chart || bars.length === 0) return res;
+
+                const logicalRange = chart.timeScale().getVisibleLogicalRange();
+                if (logicalRange) {
+                    const from = Math.max(0, Math.floor(logicalRange.from));
+                    const to = Math.min(bars.length - 1, Math.ceil(logicalRange.to));
+                    let min = Infinity;
+                    let max = -Infinity;
+
+                    for (let i = from; i <= to; i++) {
+                        if (bars[i]) {
+                            if (bars[i].low < min) min = bars[i].low;
+                            if (bars[i].high > max) max = bars[i].high;
+                        }
+                    }
+
+                    if (min !== Infinity && max !== -Infinity) {
+                        return {
+                            priceRange: {
+                                minValue: min,
+                                maxValue: max,
+                            },
+                        };
+                    }
+                }
+                return res;
+            },
         });
 
         // Volume histogram at the bottom with separate price scale
@@ -171,6 +200,14 @@ export default function Chart() {
         });
     });
 
+    // Track whether initial range has been set for the current timeframe
+    let initialRangeSet = false;
+
+    createEffect(() => {
+        chartTimeframe(); // Subscribe to timeframe changes to reset focus
+        initialRangeSet = false;
+    });
+
     // Update chart data when bars change
     createEffect(() => {
         const bars = chartBars();
@@ -193,6 +230,19 @@ export default function Chart() {
                     color: bar.close >= bar.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)',
                 }));
                 volumeSeries.setData(volumeData);
+            }
+
+            // Set initial visible focus range (most recent ~100 bars) on initial load or timeframe switch
+            if (!initialRangeSet && chart) {
+                const defaultVisibleBars = 100;
+                const fromIndex = Math.max(0, bars.length - defaultVisibleBars);
+                const toIndex = bars.length + 3;
+                chart.timeScale().setVisibleLogicalRange({
+                    from: fromIndex,
+                    to: toIndex,
+                });
+                chart.priceScale('right').applyOptions({ autoScale: true });
+                initialRangeSet = true;
             }
         }
     });
@@ -340,38 +390,49 @@ export default function Chart() {
     createEffect(() => {
         const state = marketState();
         const orb60 = state?.session?.ORB60;
+        const bars = chartBars();
 
-        if (candleSeries) {
-            // Remove existing lines if they exist
-            if (orb60HighLine) {
-                candleSeries.removePriceLine(orb60HighLine);
-                orb60HighLine = null;
-            }
-            if (orb60LowLine) {
-                candleSeries.removePriceLine(orb60LowLine);
-                orb60LowLine = null;
-            }
+        if (!chart) return;
 
-            // Add new lines if ORB60 is available
-            if (orb60) {
-                orb60HighLine = candleSeries.createPriceLine({
-                    price: orb60.high,
-                    color: '#ff9800', // Sleek orange color
-                    lineWidth: 2,
-                    lineStyle: 2, // Dashed
-                    axisLabelVisible: true,
-                    title: 'ORB60 High',
-                });
+        // Remove existing ORB60 series
+        for (const s of orb60Series) {
+            chart.removeSeries(s);
+        }
+        orb60Series = [];
 
-                orb60LowLine = candleSeries.createPriceLine({
-                    price: orb60.low,
-                    color: '#ff9800', // Sleek orange color
-                    lineWidth: 2,
-                    lineStyle: 2, // Dashed
-                    axisLabelVisible: true,
-                    title: 'ORB60 Low',
-                });
-            }
+        if (orb60 && bars.length > 0) {
+            const firstTime = bars[0].time as Time;
+            const lastTime = bars[bars.length - 1].time as Time;
+
+            const highSeries = chart.addSeries(LineSeries, {
+                color: '#ff9800',
+                lineWidth: 2,
+                lineStyle: 2, // Dashed
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+                autoscaleInfoProvider: () => null,
+            });
+            highSeries.setData([
+                { time: firstTime, value: orb60.high },
+                { time: lastTime, value: orb60.high },
+            ]);
+            orb60Series.push(highSeries);
+
+            const lowSeries = chart.addSeries(LineSeries, {
+                color: '#ff9800',
+                lineWidth: 2,
+                lineStyle: 2, // Dashed
+                priceLineVisible: false,
+                lastValueVisible: false,
+                crosshairMarkerVisible: false,
+                autoscaleInfoProvider: () => null,
+            });
+            lowSeries.setData([
+                { time: firstTime, value: orb60.low },
+                { time: lastTime, value: orb60.low },
+            ]);
+            orb60Series.push(lowSeries);
         }
     });
 
