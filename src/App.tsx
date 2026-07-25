@@ -12,9 +12,10 @@ import PatternsTable from './components/PatternsTable';
 import PivotPoints from './components/PivotPoints';
 import TradeSetups from './components/TradeSetups';
 import Trendlines from './components/Trendlines';
+import BacktestDashboard from './components/BacktestDashboard';
 import './App.css';
 
-type Tab = 'chart' | 'setups' | 'trendlines';
+type Tab = 'chart' | 'setups' | 'trendlines' | 'backtest';
 
 const [activeTab, setActiveTab] = createSignal<Tab>('chart');
 
@@ -114,6 +115,12 @@ export default function App() {
           >
             📐 Trendlines
           </button>
+          <button
+            class={`tab-btn ${activeTab() === 'backtest' ? 'active' : ''}`}
+            onClick={() => setActiveTab('backtest')}
+          >
+            🧪 Backtest
+          </button>
         </div>
       </div>
 
@@ -133,6 +140,10 @@ export default function App() {
 
       <Show when={activeTab() === 'trendlines'}>
         <Trendlines />
+      </Show>
+
+      <Show when={activeTab() === 'backtest'}>
+        <BacktestDashboard />
       </Show>
     </div>
   );
