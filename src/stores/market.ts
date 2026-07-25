@@ -97,13 +97,15 @@ async function refreshAnalysis(): Promise<void> {
 // ==================== Fast loop: chart bars (5s) ====================
 
 let barsTimerId: number | undefined;
+let lastLoadedTimeframe: number | undefined;
 
 async function refreshBars(): Promise<void> {
     const chartTf = chartTimeframe();
 
     try {
         const now = Date.now();
-        const isRecent = lastBarsFullLoad > 0 && (now - lastBarsFullLoad) < INCREMENTAL_THRESHOLD_MS;
+        const tfChanged = lastLoadedTimeframe !== chartTf;
+        const isRecent = !tfChanged && lastBarsFullLoad > 0 && (now - lastBarsFullLoad) < INCREMENTAL_THRESHOLD_MS;
         const barsBack = isRecent ? INCREMENTAL_BARS_BACK : FULL_BARS_BACK;
 
         const newBars = await fetchBars(chartTf, barsBack);
@@ -113,9 +115,10 @@ async function refreshBars(): Promise<void> {
             const merged = mergeBars(chartBars(), newBars);
             setChartBars(merged);
         } else {
-            // Full replacement
+            // Full replacement on timeframe change or full reload
             setChartBars(newBars);
             lastBarsFullLoad = Date.now();
+            lastLoadedTimeframe = chartTf;
         }
     } catch (e) { console.error("Bars fetch error:", e); }
 
@@ -216,25 +219,19 @@ export async function recalculateTrendlines(barsBack?: number) {
 }
 
 let effectTimeout: number | undefined;
-let effectInitialized = false;
 
 // Re-fetch when timeframes or chart timeframe change
 createEffect(() => {
     selectedTimeframes(); // Subscribe to changes
     const tf = chartTimeframe(); // Subscribe to chart timeframe changes
 
-    // Skip initial run — startAutoRefresh() handles the first fetch
-    if (!effectInitialized) {
-        effectInitialized = true;
-        return;
-    }
+    // Reset lastBarsFullLoad and clear chart bars immediately on timeframe change
+    lastBarsFullLoad = 0;
 
     // Debounce the refresh to avoid double-fetching when both signals change
     if (effectTimeout) window.clearTimeout(effectTimeout);
     effectTimeout = window.setTimeout(() => {
-        if (analysisTimerId !== undefined) {
-            refreshData();
-        }
+        refreshData();
     }, 50);
 
     // Trendline Handling:
